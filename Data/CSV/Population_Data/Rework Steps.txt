@@ -1,0 +1,4 @@
+Borough	Year	FIPS County Code	NTA Code	NTA Name	Population
+Borough	FIPS County Code	NTA Code	NTA Name	Population
+
+Removed Data from years 2000 so only 2010 data is left
