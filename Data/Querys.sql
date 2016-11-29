@@ -110,6 +110,50 @@ CREATE TABLE rental_data_manhatten_mapbox AS
  CREATE TABLE rental_data_statenisland_mapbox AS
 (SELECT sti.address, sti.neighborhood, sti.value_per_sqft, sti.long, sti.lat, ST_MakePoint(sti.long, sti.lat) as coords 
  FROM rental_data_statenisland_mapbox_temp sti);
+ 
+ /* Find Failures Mapbox */
+
+CREATE TABLE mapbox_fails AS
+(
+    SELECT *
+	FROM rental_data_bronx_mapbox bron
+	WHERE bron.lat > 41 or bron.lat < 40.5 OR
+	bron.long < -74.25 or bron.long > -73.65
+);
+
+INSERT INTO mapbox_fails
+(
+    SELECT *
+	FROM rental_data_brooklyn_mapbox broo
+	WHERE broo.lat > 41 or broo.lat < 40.5 OR
+	broo.long < -74.25 or broo.long > -73.65
+);
+
+INSERT INTO mapbox_fails
+(
+    SELECT *
+	FROM rental_data_manhatten_mapbox manh
+	WHERE manh.lat > 41 or manh.lat < 40.5 OR
+	manh.long < -74.25 or manh.long > -73.65
+);
+
+INSERT INTO mapbox_fails
+(
+    SELECT *
+	FROM rental_data_queens_mapbox manh
+	WHERE manh.lat > 41 or manh.lat < 40.5 OR
+	manh.long < -74.25 or manh.long > -73.65
+);
+
+INSERT INTO mapbox_fails
+(
+    SELECT *
+	FROM rental_data_statenisland_mapbox manh
+	WHERE manh.lat > 41 or manh.lat < 40.5 OR
+	manh.long < -74.25 or manh.long > -73.65
+);
+
+SELECT * FROM mapbox_fails;
 
 /* Rental Data Google */
 
@@ -186,13 +230,53 @@ CREATE TABLE rental_data_manhatten_google AS
  FROM rental_data_statenisland_google_temp sti);
 
 
-/* Find Failures */
+/* Find Failures Google */
+
+CREATE TABLE google_fails AS
+(
+    SELECT *
+	FROM rental_data_bronx_google bron
+	WHERE bron.lat > 41 or bron.lat < 40.5 OR
+	bron.long < -74.25 or bron.long > -73.65
+);
+
+INSERT INTO google_fails
+(
+    SELECT *
+	FROM rental_data_brooklyn_google broo
+	WHERE broo.lat > 41 or broo.lat < 40.5 OR
+	broo.long < -74.25 or broo.long > -73.65
+);
+
+INSERT INTO google_fails
+(
+    SELECT *
+	FROM rental_data_manhatten_google manh
+	WHERE manh.lat > 41 or manh.lat < 40.5 OR
+	manh.long < -74.25 or manh.long > -73.65
+);
+
+INSERT INTO google_fails
+(
+    SELECT *
+	FROM rental_data_queens_google manh
+	WHERE manh.lat > 41 or manh.lat < 40.5 OR
+	manh.long < -74.25 or manh.long > -73.65
+);
+
+INSERT INTO google_fails
+(
+    SELECT *
+	FROM rental_data_statenisland_google manh
+	WHERE manh.lat > 41 or manh.lat < 40.5 OR
+	manh.long < -74.25 or manh.long > -73.65
+);
 
 
-select *
-from rental_data_bronx sti
-where sti.lat > 41 or sti.lat < 40.5 OR
-sti.long < -74.25 or sti.long > -73.65;
+select * from google_fails;
+
+drop table google_fail;
+
 
 select * 
 from areas
