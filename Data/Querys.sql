@@ -4,38 +4,52 @@
 /* public schoolpoints importiert */
 
 /* Complaint Data */
-CREATE TABLE complaint_data
+CREATE TABLE complaint_data_temp
 (
-	CMPLNT_NUM INTEGER,
-    OFNS_DESC VARCHAR,
-    LAW_CAT_CD VARCHAR,
-    BORO_NM VARCHAR,
-    ADDR_PCT_CD	INTEGER,
-    X_COORD_CD INTEGER,
-    Y_COORD_CD INTEGER,
+	Complaintnr INTEGER,
+    Description VARCHAR,
+    TypeOfComplaint VARCHAR,
     Latitude DOUBLE PRECISION,
-    Longitude DOUBLE PRECISION,
-    Lat_Lon VARCHAR
+    Longitude DOUBLE PRECISION
 );
 
-COPY complaint_data FROM 'D:\Spatial\Data\CSV\Complaint_Data\Comlaint_Data.txt' DELIMITER '	' CSV;
+COPY complaint_data_temp FROM 'D:\Spatial\Data\CSV\Complaint_Data\Comlaint_Data.txt' DELIMITER '	' CSV;
 
-select * from complaint_data;
+SELECT * FROM complaint_data_temp;
 
-/* Population Data */
+CREATE TABLE complaint_data AS
+(SELECT cdt.Complaintnr, cdt.Description, cdt.TypeOfComplaint, cdt.Latitude, cdt.Longitude, ST_MAKEPOINT(cdt.Longitude, cdt.Latitude) as coords
+ FROM complaint_data_temp cdt);
+ 
+SELECT * FROM complaint_data;
+
+/* Population Data View Done */
+drop table population_data;
 
 CREATE TABLE population_data
 (
-    Borough	VARCHAR,
-    FIPS_County_Code INTEGER,
-    NTA_Code VARCHAR,
-    NTA_Name VARCHAR,
+    borough	VARCHAR,
+    countycode INTEGER,
+    ntacode VARCHAR,
+    ntaname VARCHAR,
     Population INTEGER
 );
 
 COPY population_data FROM 'D:\Spatial\Data\CSV\Population_Data\Population_Data.txt' DELIMITER '	' CSV;
 
-select * from population_data;
+SELECT * FROM population_data;
+
+CREATE VIEW populationarea AS
+(SELECT a.*, (p.population / 1000000.0) AS populationfactor, p.population
+ FROM areas a, population_data p
+ WHERE a.ntacode=p.ntacode);
+ 
+drop view populationarea;
+select * from populationarea;
+
+SELECT * FROM populationarea WHERE population = (SELECT MAX(population) FROM populationarea);
+SELECT * FROM populationarea WHERE population = (SELECT MIN(population) FROM populationarea WHERE population > 0);
+DROP VIEW populationarea;
 
 /* Rental Data Mapbox */
 
