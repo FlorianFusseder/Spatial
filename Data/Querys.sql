@@ -4,6 +4,7 @@
 /* public schoolpoints importiert */
 
 /* Complaint Data */
+/*_________________________________________________________________________________________________________*/
 CREATE TABLE complaint_data_temp
 (
 	Complaintnr INTEGER,
@@ -23,8 +24,26 @@ CREATE TABLE complaint_data AS
  
 SELECT * FROM complaint_data;
 
-/* Population Data View Done */
-drop table population_data;
+SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, COUNT(cd.complaintnr) AS Total
+FROM areas a
+LEFT JOIN complaint_data cd
+ON ST_CONTAINS(a.geom, cd.coords)
+GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips
+ORDER BY COUNT(cd.complaintnr) DESC;
+
+
+/* The higher the more complaints */
+CREATE VIEW complaintarea AS
+(SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, (COUNT(cd.complaintnr) / 10000.0) AS Total
+ FROM areas a
+ LEFT JOIN complaint_data cd
+ ON ST_CONTAINS(a.geom, cd.coords)
+ GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips);
+ 
+select * from complaintarea;
+
+/* Population Data */
+/*_________________________________________________________________________________________________________*/
 
 CREATE TABLE population_data
 (
@@ -39,6 +58,7 @@ COPY population_data FROM 'D:\Spatial\Data\CSV\Population_Data\Population_Data.t
 
 SELECT * FROM population_data;
 
+/* The higher the more people */
 CREATE VIEW populationarea AS
 (SELECT a.*, (p.population / 1000000.0) AS populationfactor, p.population
  FROM areas a, population_data p
@@ -49,9 +69,9 @@ select * from populationarea;
 
 SELECT * FROM populationarea WHERE population = (SELECT MAX(population) FROM populationarea);
 SELECT * FROM populationarea WHERE population = (SELECT MIN(population) FROM populationarea WHERE population > 0);
-DROP VIEW populationarea;
 
 /* Rental Data Mapbox */
+/*_________________________________________________________________________________________________________*/
 
 CREATE TABLE rental_data_manhatten_mapbox_temp
 (
@@ -125,6 +145,7 @@ CREATE TABLE rental_data_manhatten_mapbox AS
 (SELECT sti.address, sti.neighborhood, sti.value_per_sqft, sti.long, sti.lat, ST_MakePoint(sti.long, sti.lat) as coords 
  FROM rental_data_statenisland_mapbox_temp sti);
  
+ 
  /* Find Failures Mapbox */
 
 CREATE TABLE mapbox_fails AS
@@ -167,9 +188,10 @@ INSERT INTO mapbox_fails
 	manh.long < -74.25 or manh.long > -73.65
 );
 
-SELECT * FROM mapbox_fails;
+SELECT count(*) FROM mapbox_fails;	/* Amount of Fails -> 2441, so we don't use mapbox data */
 
 /* Rental Data Google */
+/*_________________________________________________________________________________________________________*/
 
 CREATE TABLE rental_data_manhatten_google_temp
 (
@@ -287,17 +309,83 @@ INSERT INTO google_fails
 );
 
 
-select * from google_fails;
+select * from google_fails;	/* 4 Fails shown so we use google data... ofc...*/
 
-drop table google_fail;
+/* view of all retal data */
+CREATE VIEW allrentalData AS
+SELECT * FROM rental_data_bronx_google;
+
+INSERT INTO allrentaldata
+SELECT * FROM rental_data_brooklyn_google;
+
+INSERT INTO allrentaldata
+SELECT * FROM rental_data_manhatten_google;
+
+INSERT INTO allrentaldata
+SELECT * FROM rental_data_queens_google;
+
+INSERT INTO allrentaldata
+SELECTt * FROM rental_data_statenisland_google;
+
+/* Rental Data as Select */
+SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, ((SUM(r.value_per_sqft) / count(r.value_per_sqft)) / 1000.0) AS Total
+FROM areas a
+LEFT JOIN allrentaldata r
+ON ST_CONTAINS(a.geom, r.coords)
+GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips
+ORDER BY (SUM(r.value_per_sqft) / count(r.value_per_sqft)) DESC;
+
+/* Rental Data View*/
+CREATE VIEW rentalarea AS
+(SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, ((SUM(r.value_per_sqft) / count(r.value_per_sqft)) / 1000.0) AS Total
+FROM areas a
+LEFT JOIN allrentaldata r
+ON ST_CONTAINS(a.geom, r.coords)
+GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips
+ORDER BY ((SUM(r.value_per_sqft) / count(r.value_per_sqft)) / 1000.0) DESC);
 
 
-select * 
-from areas
-where lower(ntaname) like lower('%sunny%');
+/* Collegues and universitys */
+/*_________________________________________________________________________________________________________*/
 
-Create view Brooklyn as
-select *
-from areas
-where boro_name = 'Brooklyn';
+SELECT * FROM colleges_and_universitys;
 
+CREATE VIEW colleguesuniversityarea AS
+(SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, (COUNT(cu.geom) / 10.0) AS Total
+ FROM areas a
+ LEFT JOIN colleges_and_universitys cu
+ ON ST_CONTAINS(a.geom, cu.geom)
+ GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips)
+ ORDER BY (COUNT(cu.geom) / 10.0) DESC;
+ 
+ SELECT * FROM colleguesuniversityarea;
+
+/* parkinglot  */
+/*_________________________________________________________________________________________________________*/
+
+SELECT * FROM parking_lots;
+
+CREATE VIEW parkinglotarea AS
+(SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, SUM(ST_AREA(pl.geom::geography)) AS Total
+ FROM areas a
+ LEFT JOIN parking_lots pl
+ ON ST_INTERSECTS(a.geom, pl.geom)
+ GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips)
+ ORDER BY SUM(ST_AREA(pl.geom)) DESC;
+ 
+ SELECT * FROM parkinglotarea;
+
+/* public schoolpoints */
+/*_________________________________________________________________________________________________________*/
+
+SELECT * FROM public_school_points;
+
+CREATE VIEW publicschoolarea AS
+(SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, (COUNT(sp.geom) / 100.0) AS Total
+ FROM areas a
+ LEFT JOIN public_school_points sp
+ ON ST_CONTAINS(a.geom, sp.geom)
+ GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips)
+ ORDER BY (COUNT(sp.geom)) DESC;
+ 
+ SELECT * FROM publicschoolarea;
