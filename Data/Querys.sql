@@ -21,26 +21,23 @@ SELECT * FROM complaint_data_temp;
 CREATE TABLE complaint_data AS
 (SELECT cdt.Complaintnr, cdt.Description, cdt.TypeOfComplaint, cdt.Latitude, cdt.Longitude, ST_MAKEPOINT(cdt.Longitude, cdt.Latitude) as coords
  FROM complaint_data_temp cdt);
- 
-SELECT * FROM complaint_data;
 
-SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, COUNT(cd.complaintnr) AS Total
+/* Complaint data per region */
+CREATE TABLE complaint_data_per_region AS
+SELECT a.ntacode, COUNT(cd.complaintnr) AS Total
 FROM areas a
 LEFT JOIN complaint_data cd
 ON ST_CONTAINS(a.geom, cd.coords)
-GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips
+GROUP BY a.ntacode
 ORDER BY COUNT(cd.complaintnr) DESC;
 
-
-/* The higher the more complaints */
+/* View Vor Complaint data */
 CREATE VIEW complaintarea AS
-(SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, (COUNT(cd.complaintnr) / 10000.0) AS Total
+(SELECT a.ntacode, (COUNT(cd.complaintnr)::FLOAT / (SELECT MAX(total)::FLOAT FROM complaint_data_per_region)) AS Total
  FROM areas a
  LEFT JOIN complaint_data cd
  ON ST_CONTAINS(a.geom, cd.coords)
- GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips);
- 
-select * from complaintarea;
+ GROUP BY a.ntacode);
 
 /* Population Data */
 /*_________________________________________________________________________________________________________*/
@@ -58,18 +55,12 @@ COPY population_data FROM 'D:\Spatial\Data\CSV\Population_Data\Population_Data.t
 
 SELECT * FROM population_data;
 
-/* The higher the more people */
+/* View for Rental Data*/
 CREATE VIEW populationarea AS
-(SELECT a.*, (p.population / 1000000.0) AS populationfactor, p.population
- FROM areas a, population_data p
+(SELECT a.ntacode, (p.population::FLOAT / pmax.maximum::FLOAT ) AS populationfactor
+ FROM areas a, population_data p, (SELECT max(pp.population) AS maximum FROM population_data pp) AS pmax
  WHERE a.ntacode=p.ntacode);
  
-drop view populationarea;
-select * from populationarea;
-
-SELECT * FROM populationarea WHERE population = (SELECT MAX(population) FROM populationarea);
-SELECT * FROM populationarea WHERE population = (SELECT MIN(population) FROM populationarea WHERE population > 0);
-
 /* Rental Data Mapbox */
 /*_________________________________________________________________________________________________________*/
 
@@ -311,8 +302,8 @@ INSERT INTO google_fails
 
 select * from google_fails;	/* 4 Fails shown so we use google data... ofc...*/
 
-/* view of all retal data */
-CREATE VIEW allrentalData AS
+/* table of all retal data */
+CREATE TABLE allrentalData AS
 SELECT * FROM rental_data_bronx_google;
 
 INSERT INTO allrentaldata
@@ -325,67 +316,85 @@ INSERT INTO allrentaldata
 SELECT * FROM rental_data_queens_google;
 
 INSERT INTO allrentaldata
-SELECTt * FROM rental_data_statenisland_google;
+SELECT * FROM rental_data_statenisland_google;
 
-/* Rental Data as Select */
-SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, ((SUM(r.value_per_sqft) / count(r.value_per_sqft)) / 1000.0) AS Total
-FROM areas a
-LEFT JOIN allrentaldata r
-ON ST_CONTAINS(a.geom, r.coords)
-GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips
-ORDER BY (SUM(r.value_per_sqft) / count(r.value_per_sqft)) DESC;
+/* Rental Data per region table */
+CREATE TABLE rental_data_per_region AS
+ SELECT a.ntacode, (SUM(r.value_per_sqft)::FLOAT / COUNT(r.value_per_sqft)::FLOAT) AS Total
+ FROM areas a
+ LEFT JOIN allrentaldata r
+ ON ST_CONTAINS(a.geom, r.coords)
+ GROUP BY a.ntacode; 
 
 /* Rental Data View*/
 CREATE VIEW rentalarea AS
-(SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, ((SUM(r.value_per_sqft) / count(r.value_per_sqft)) / 1000.0) AS Total
-FROM areas a
-LEFT JOIN allrentaldata r
-ON ST_CONTAINS(a.geom, r.coords)
-GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips
-ORDER BY ((SUM(r.value_per_sqft) / count(r.value_per_sqft)) / 1000.0) DESC);
+ SELECT a.ntacode, ((SUM(r.value_per_sqft)::FLOAT / COUNT(r.value_per_sqft))::FLOAT / (SELECT MAX(total) FROM rental_data_per_region)) AS Total
+ FROM areas a
+ LEFT JOIN allrentaldata r
+ ON ST_CONTAINS(a.geom, r.coords)
+ GROUP BY a.ntacode;
 
+select * from rentalarea;
 
 /* Collegues and universitys */
 /*_________________________________________________________________________________________________________*/
 
 SELECT * FROM colleges_and_universitys;
 
-CREATE VIEW colleguesuniversityarea AS
-(SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, (COUNT(cu.geom) / 10.0) AS Total
+/* Collegues and universtiys per region*/
+ CREATE TABLE colleguesuniversity_per_region AS
+(SELECT a.ntacode, (COUNT(cu.geom)) AS Total
  FROM areas a
  LEFT JOIN colleges_and_universitys cu
  ON ST_CONTAINS(a.geom, cu.geom)
- GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips)
- ORDER BY (COUNT(cu.geom) / 10.0) DESC;
+ GROUP BY a.ntacode);
  
- SELECT * FROM colleguesuniversityarea;
+/* Collegue View */
+CREATE VIEW colleguesuniversityarea AS
+(SELECT a.ntacode, (COUNT(cu.geom)::FLOAT / (SELECT MAX(total)::FLOAT from colleguesuniversity_per_region)) AS Total
+ FROM areas a
+ LEFT JOIN colleges_and_universitys cu
+ ON ST_CONTAINS(a.geom, cu.geom)
+ GROUP BY a.ntacode);                  
 
 /* parkinglot  */
 /*_________________________________________________________________________________________________________*/
 
 SELECT * FROM parking_lots;
 
-CREATE VIEW parkinglotarea AS
-(SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, SUM(ST_AREA(pl.geom::geography)) AS Total
+/* Parking lot area per region */
+CREATE TABLE parking_lots_per_region AS
+ SELECT a.ntacode, SUM(ST_AREA(pl.geom::geography)) AS Total
  FROM areas a
  LEFT JOIN parking_lots pl
  ON ST_INTERSECTS(a.geom, pl.geom)
- GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips)
- ORDER BY SUM(ST_AREA(pl.geom)) DESC;
+ GROUP BY a.ntacode;
  
- SELECT * FROM parkinglotarea;
+/* Parking lot view */ 
+CREATE VIEW parkinglotarea AS
+ SELECT a.ntacode, (SUM(ST_AREA(pl.geom::geography))::FLOAT / (SELECT MAX(total)::FLOAT FROM parking_lots_per_region)) AS Total
+ FROM areas a
+ LEFT JOIN parking_lots pl
+ ON ST_INTERSECTS(a.geom, pl.geom)
+ GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips;
 
 /* public schoolpoints */
 /*_________________________________________________________________________________________________________*/
 
 SELECT * FROM public_school_points;
 
-CREATE VIEW publicschoolarea AS
-(SELECT a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips, (COUNT(sp.geom) / 100.0) AS Total
+/* public school data per region*/
+CREATE TABLE public_school_points_per_region AS
+ SELECT a.ntacode, COUNT(sp.geom) AS Total
  FROM areas a
  LEFT JOIN public_school_points sp
  ON ST_CONTAINS(a.geom, sp.geom)
- GROUP BY a.gid, a.ntacode, a.boro_name, a.shape_leng, a.county_fips)
- ORDER BY (COUNT(sp.geom)) DESC;
- 
- SELECT * FROM publicschoolarea;
+ GROUP BY a.ntacode;
+
+/* View for public school areas*/
+CREATE VIEW publicschoolarea AS
+ SELECT a.ntacode, (COUNT(sp.geom)::FLOAT / (SELECT MAX(total)::FLOAT FROM public_school_points_per_region) ) AS Total
+ FROM areas a
+ LEFT JOIN public_school_points sp
+ ON ST_CONTAINS(a.geom, sp.geom)
+ GROUP BY a.ntacode;
